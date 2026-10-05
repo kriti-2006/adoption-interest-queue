@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Internal shelter tool for managing the adoption interest queue.">
+  <title>Adoption Interest Queue</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#queue-section">Skip to queue</a>
+
+  <header class="app-header">
+    <div class="container">
+      <p class="app-header__eyebrow">Shelter operations</p>
+      <h1>Adoption Interest Queue</h1>
+      <p class="app-header__description">
+        Record people who want to adopt, keep them in the order they registered, and track where each interest stands.
+      </p>
+    </div>
+  </header>
+
+  <main id="main" class="container app-main">
+    <div id="app-notice" class="notice" role="status" hidden>
+      <p id="app-notice-text" class="notice__text"></p>
+      <button id="app-notice-dismiss" type="button" class="btn btn--secondary btn--sm">Dismiss</button>
+    </div>
+
+    <section class="toolbar" aria-labelledby="toolbar-heading">
+      <h2 id="toolbar-heading" class="visually-hidden">Queue controls</h2>
+
+      <p class="queue-count">
+        <span id="queue-count" class="queue-count__value">0</span>
+        <span id="queue-count-label" class="queue-count__label">interests in queue</span>
+      </p>
+
+      <form id="search-form" class="search" role="search">
+        <label for="search-input" class="search__label">Search queue</label>
+        <div class="search__control">
+          <input id="search-input" class="input" type="search" name="search" maxlength="100"
+                 autocomplete="off" spellcheck="false" aria-describedby="search-hint">
+          <button id="clear-search" type="button" class="btn btn--secondary" hidden>Clear search</button>
+        </div>
+        <p id="search-hint" class="hint">Name, email, phone, animal, type or status.</p>
+      </form>
+
+      <button id="add-interest-button" type="button" class="btn btn--primary toolbar__add">Add Interest</button>
+    </section>
+
+    <section id="queue-section" class="queue" aria-labelledby="queue-heading" tabindex="-1">
+      <div class="queue__header">
+        <h2 id="queue-heading">Queue</h2>
+        <p id="results-summary" class="queue__summary"></p>
+      </div>
+
+      <div id="queue-table-wrapper" class="table-wrapper" role="region" aria-label="Queue table (scrolls horizontally on small screens)" tabindex="0">
+        <table class="queue-table">
+          <caption class="visually-hidden">
+            Adoption interests in queue order. Change an interest's status with its status menu, or use the row buttons to view or remove it.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col" class="cell--position">Position</th>
+              <th scope="col">Applicant</th>
+              <th scope="col">Email</th>
+              <th scope="col">Phone</th>
+              <th scope="col">Animal</th>
+              <th scope="col">Type</th>
+              <th scope="col">Status</th>
+              <th scope="col">Date added</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="queue-body"></tbody>
+        </table>
+      </div>
+
+      <div id="empty-state" class="empty-state" hidden>
+        <h3 id="empty-state-title" class="empty-state__title"></h3>
+        <p id="empty-state-message" class="empty-state__message"></p>
+        <button id="empty-state-action" type="button" class="btn btn--primary"></button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div class="container">
+      <p>Queue data is stored in this browser only. Records tagged “Demo” are fictional sample data and can be removed.</p>
+    </div>
+  </footer>
+
+  <!-- Toasts are visual only; screen readers hear the same text through the live regions below. -->
+  <aside id="toast-region" class="toast-region" aria-label="Notifications"></aside>
+  <div id="live-polite" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+  <div id="live-assertive" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
+
+</body>
+</html>
