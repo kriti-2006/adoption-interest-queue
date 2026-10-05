@@ -1,0 +1,23 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Dependencies (none are required, but keep them out if added locally)
+node_modules/
+
+# Environment and secrets — never commit API keys, credentials or PII
+.env
+.env.*
+*.pem
+*.key
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+
+# Logs and local tooling output
+*.log
+npm-debug.log*
+lighthouse-report*.html
+lighthouse-report*.json
