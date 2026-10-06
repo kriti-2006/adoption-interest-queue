@@ -464,6 +464,31 @@
     dom.notice.hidden = false;
   }
 
+  function scheduleSearchAnnouncement() {
+    window.clearTimeout(ui.searchAnnounceTimer);
+    ui.searchAnnounceTimer = window.setTimeout(() => {
+      const total = state.adoptionInterests.length;
+      const visibleCount = getVisibleEntries().length;
+      if (total === 0 || visibleCount === 0) return; // the empty state announces itself
+      if (!state.searchQuery.trim()) announce(`Showing all ${total} ${pluralize(total, 'interest')}.`);
+      else announce(`${visibleCount} ${pluralize(visibleCount, 'result')} found.`);
+    }, SEARCH_ANNOUNCE_DELAY_MS);
+  }
+
+  function handleSearchInput(event) {
+    state.searchQuery = event.target.value.slice(0, LIMITS.search);
+    render();
+    scheduleSearchAnnouncement();
+  }
+
+  function clearSearch() {
+    window.clearTimeout(ui.searchAnnounceTimer);
+    state.searchQuery = '';
+    render();
+    dom.searchInput.focus();
+    announce('Search cleared.');
+  }
+
   // ---------------------------------------------------------------------------
   // Initialisation
   // ---------------------------------------------------------------------------
@@ -494,6 +519,19 @@
   }
 
   function bindEvents() {
+    dom.emptyAction.addEventListener('click', () => {
+      if (dom.emptyAction.dataset.action !== 'add') clearSearch();
+    });
+
+    dom.searchForm.addEventListener('submit', (event) => event.preventDefault());
+    dom.searchInput.addEventListener('input', handleSearchInput);
+    dom.searchInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && dom.searchInput.value) {
+        event.preventDefault();
+        clearSearch();
+      }
+    });
+    dom.clearSearch.addEventListener('click', clearSearch);
 
     dom.noticeDismiss.addEventListener('click', () => {
       dom.notice.hidden = true;
