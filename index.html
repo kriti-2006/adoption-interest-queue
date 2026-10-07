@@ -155,5 +155,38 @@
       </div>
     </form>
   </dialog>
+    <!-- View details -->
+  <dialog id="details-dialog" class="dialog" aria-labelledby="details-dialog-title">
+    <div class="dialog__body">
+      <div class="dialog__header">
+        <h2 id="details-dialog-title">Adoption interest details</h2>
+      </div>
+      <dl id="details-list" class="details"></dl>
+      <div class="dialog__footer">
+        <button id="close-details" type="button" class="btn btn--primary" autofocus>Close</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Confirm removal -->
+  <dialog id="remove-dialog" class="dialog dialog--narrow" role="alertdialog" aria-labelledby="remove-dialog-title" aria-describedby="remove-dialog-description">
+    <div class="dialog__body">
+      <div class="dialog__header">
+        <h2 id="remove-dialog-title">Remove adoption interest</h2>
+      </div>
+      <div id="remove-dialog-description">
+        <p>Are you sure you want to remove this adoption interest?</p>
+        <p id="remove-summary" class="remove-summary"></p>
+        <p class="dialog__description">Everyone behind it moves up one place. This cannot be undone.</p>
+      </div>
+      <div class="dialog__footer">
+        <button id="cancel-remove" type="button" class="btn btn--secondary" autofocus>Cancel</button>
+        <button id="confirm-remove" type="button" class="btn btn--danger">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn__label">Remove</span>
+        </button>
+      </div>
+    </div>
+  </dialog>
 </body>
 </html>

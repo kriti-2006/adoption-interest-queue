@@ -394,6 +394,27 @@
     return row;
   }
 
+  function renderDetails(interest, position) {
+    const rows = [
+      ['Queue position', String(position)],
+      ['Applicant name', interest.applicantName],
+      ['Email', interest.email],
+      ['Phone', interest.phone],
+      ['Animal name', interest.animalName],
+      ['Animal type', interest.animalType],
+      ['Status', interest.status],
+      ['Date added', formatDate(interest.createdAt)],
+      ['Last updated', formatDate(interest.updatedAt)],
+      ['Notes', interest.notes || 'No notes provided.'],
+      ['Record type', interest.isSample ? 'Demo record (fictional sample data)' : 'Entered by staff'],
+      ['Record ID', interest.id],
+    ];
+
+    dom.detailsList.innerHTML = rows
+      .map(([term, value]) => `<div class="details__row"><dt>${escapeHTML(term)}</dt><dd>${escapeHTML(value)}</dd></div>`)
+      .join('');
+  }
+
   // ---------------------------------------------------------------------------
   // Feedback: live-region announcements, toasts and the notice banner
   // ---------------------------------------------------------------------------
@@ -587,6 +608,101 @@
     return interest;
   }
 
+  async function updateStatus(id, requestedStatus) {
+    const interest = findInterest(id);
+    if (!interest || !STATUSES.includes(requestedStatus)) return;
+
+    const pending = state.pendingUpdates.get(id);
+    if (pending) {
+      // A request is already in flight for this row: the latest selection wins when it completes.
+      if (pending.type === 'status') pending.status = requestedStatus;
+      return;
+    }
+    if (interest.status === requestedStatus) return;
+
+    state.pendingUpdates.set(id, { type: 'status', status: requestedStatus });
+    announce(`Updating status for ${interest.applicantName}…`);
+    render();
+
+    let outcome = 'failed';
+    try {
+      await simulateNetworkRequest();
+      const targetStatus = state.pendingUpdates.get(id).status;
+      const current = findInterest(id);
+
+      if (!current) {
+        outcome = 'missing';
+      } else if (current.status === targetStatus) {
+        outcome = 'unchanged';
+      } else {
+        const updatedAt = new Date().toISOString();
+        state.adoptionInterests = state.adoptionInterests.map((item) => (
+          item.id === id ? { ...item, status: targetStatus, updatedAt } : item
+        ));
+        persistChanges();
+        trackAnalytics('update_status', { id, status: targetStatus });
+        outcome = 'updated';
+      }
+    } catch (error) {
+      console.warn('Status update failed.', error);
+    } finally {
+      state.pendingUpdates.delete(id);
+      render();
+    }
+
+    if (outcome === 'updated') showToast('Status updated successfully.');
+    else if (outcome === 'failed') showToast('The status could not be updated. Please try again.', 'error');
+    else if (outcome === 'missing') showToast('This adoption interest no longer exists.', 'error');
+  }
+
+  function findNeighborId(id) {
+    const entries = getVisibleEntries();
+    const index = entries.findIndex(({ interest }) => interest.id === id);
+    const neighbor = entries[index + 1] || entries[index - 1];
+    return neighbor ? neighbor.interest.id : '';
+  }
+
+  async function removeAdoptionInterest(id) {
+    if (state.pendingUpdates.has(id)) return;
+    if (!findInterest(id)) {
+      dom.removeDialog.close();
+      showToast('This adoption interest no longer exists.', 'error');
+      render();
+      return;
+    }
+
+    const neighborId = findNeighborId(id);
+    state.pendingUpdates.set(id, { type: 'remove' });
+    setRemoveDialogLoading(true);
+    render();
+
+    let removed = false;
+    try {
+      await simulateNetworkRequest();
+      state.adoptionInterests = state.adoptionInterests.filter((interest) => interest.id !== id);
+      persistChanges();
+      trackAnalytics('remove_interest', { id });
+      removed = true;
+    } catch (error) {
+      console.warn('Removal failed.', error);
+    } finally {
+      state.pendingUpdates.delete(id);
+      setRemoveDialogLoading(false);
+      render();
+    }
+
+    if (!removed) {
+      showToast('The adoption interest could not be removed. Please try again.', 'error');
+      return;
+    }
+
+    ui.removalTargetId = null;
+    const fallback = dom.emptyState.hidden ? dom.addButton : dom.emptyAction;
+    const focusTarget = (neighborId && document.querySelector(`[data-focus-key="view-${neighborId}"]`)) || fallback;
+    closeDialogAndFocus(dom.removeDialog, focusTarget);
+    showToast('Adoption interest removed.');
+  }
+
   // ---------------------------------------------------------------------------
   // Dialogs
   // ---------------------------------------------------------------------------
@@ -629,6 +745,29 @@
   function openAddDialog(opener) {
     if (!state.loading) resetAddForm();
     openDialog(dom.addDialog, opener);
+  }
+
+  function openDetailsDialog(id, opener) {
+    const index = state.adoptionInterests.findIndex((interest) => interest.id === id);
+    if (index === -1) {
+      showToast('This adoption interest no longer exists.', 'error');
+      render();
+      return;
+    }
+    renderDetails(state.adoptionInterests[index], index + 1);
+    openDialog(dom.detailsDialog, opener);
+  }
+
+  function openRemoveDialog(id, opener) {
+    const interest = findInterest(id);
+    if (!interest) {
+      showToast('This adoption interest no longer exists.', 'error');
+      render();
+      return;
+    }
+    ui.removalTargetId = id;
+    dom.removeSummary.textContent = `${interest.applicantName}: interest in ${interest.animalName} (${interest.animalType})`;
+    openDialog(dom.removeDialog, opener);
   }
 
   // ---------------------------------------------------------------------------
@@ -697,6 +836,21 @@
     announce('Search cleared.');
   }
 
+  function handleQueueClick(event) {
+    const button = event.target.closest('button[data-action]');
+    if (!button) return;
+    const { action, id } = button.dataset;
+    if (action === 'view') openDetailsDialog(id, button);
+    else if (action === 'remove') openRemoveDialog(id, button);
+  }
+
+  function handleQueueChange(event) {
+    const select = event.target;
+    if (!select.classList.contains('status-select')) return;
+    select.dataset.status = select.value;
+    updateStatus(select.dataset.id, select.value);
+  }
+
   // ---------------------------------------------------------------------------
   // Initialisation
   // ---------------------------------------------------------------------------
@@ -725,6 +879,13 @@
       formSummary: byId('form-summary'),
       submitButton: byId('submit-interest'),
       cancelAdd: byId('cancel-add'),
+      detailsDialog: byId('details-dialog'),
+      detailsList: byId('details-list'),
+      closeDetails: byId('close-details'),
+      removeDialog: byId('remove-dialog'),
+      removeSummary: byId('remove-summary'),
+      confirmRemove: byId('confirm-remove'),
+      cancelRemove: byId('cancel-remove'),
       toastRegion: byId('toast-region'),
       livePolite: byId('live-polite'),
       liveAssertive: byId('live-assertive'),
@@ -760,6 +921,9 @@
     });
     dom.clearSearch.addEventListener('click', clearSearch);
 
+    dom.queueBody.addEventListener('click', handleQueueClick);
+    dom.queueBody.addEventListener('change', handleQueueChange);
+
     dom.addForm.addEventListener('submit', handleAddSubmit);
     dom.addForm.addEventListener('input', handleFormInput);
     dom.addForm.addEventListener('change', handleFormInput);
@@ -767,8 +931,22 @@
       if (!state.loading) dom.addDialog.close();
     });
 
-    dom.addDialog.addEventListener('close', handleDialogClose);
-    dom.addDialog.addEventListener('cancel', handleDialogCancel);
+    dom.closeDetails.addEventListener('click', () => dom.detailsDialog.close());
+    dom.detailsDialog.addEventListener('click', (event) => {
+      if (event.target === dom.detailsDialog) dom.detailsDialog.close(); // backdrop click
+    });
+
+    dom.cancelRemove.addEventListener('click', () => {
+      if (!isRemovalInFlight()) dom.removeDialog.close();
+    });
+    dom.confirmRemove.addEventListener('click', () => {
+      if (ui.removalTargetId && !isRemovalInFlight()) removeAdoptionInterest(ui.removalTargetId);
+    });
+
+    [dom.addDialog, dom.detailsDialog, dom.removeDialog].forEach((dialog) => {
+      dialog.addEventListener('close', handleDialogClose);
+      dialog.addEventListener('cancel', handleDialogCancel);
+    });
 
     dom.noticeDismiss.addEventListener('click', () => {
       dom.notice.hidden = true;
