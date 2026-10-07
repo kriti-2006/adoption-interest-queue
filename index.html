@@ -95,6 +95,65 @@
   <aside id="toast-region" class="toast-region" aria-label="Notifications"></aside>
   <div id="live-polite" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
   <div id="live-assertive" class="visually-hidden" aria-live="assertive" aria-atomic="true"></div>
+  <!-- Add interest -->
+  <dialog id="add-dialog" class="dialog" aria-labelledby="add-dialog-title" aria-describedby="add-dialog-description">
+    <form id="add-form" class="dialog__body" novalidate>
+      <div class="dialog__header">
+        <h2 id="add-dialog-title">Add adoption interest</h2>
+        <p id="add-dialog-description" class="dialog__description">New interests join the end of the queue. Fields marked with an asterisk (*) are required.</p>
+      </div>
 
+      <div id="form-summary" class="form-summary" role="alert" hidden></div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="applicant-name" class="field__label">Applicant name <span aria-hidden="true">*</span></label>
+          <input id="applicant-name" class="input" name="applicantName" type="text" autocomplete="name" maxlength="100" required>
+          <p id="applicant-name-error" class="field__error" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="email" class="field__label">Email <span aria-hidden="true">*</span></label>
+          <input id="email" class="input" name="email" type="email" autocomplete="email" maxlength="254" spellcheck="false" required>
+          <p id="email-error" class="field__error" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="phone" class="field__label">Phone <span aria-hidden="true">*</span></label>
+          <input id="phone" class="input" name="phone" type="tel" autocomplete="tel" inputmode="tel" maxlength="20" required aria-describedby="phone-hint">
+          <p id="phone-hint" class="hint">For example (555) 010-1234 or +44 20 7946 0000.</p>
+          <p id="phone-error" class="field__error" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="animal-name" class="field__label">Animal name <span aria-hidden="true">*</span></label>
+          <input id="animal-name" class="input" name="animalName" type="text" autocomplete="off" maxlength="60" required>
+          <p id="animal-name-error" class="field__error" hidden></p>
+        </div>
+
+        <div class="field">
+          <label for="animal-type" class="field__label">Animal type <span aria-hidden="true">*</span></label>
+          <select id="animal-type" class="input" name="animalType" required>
+            <option value="">Select an animal type</option>
+          </select>
+          <p id="animal-type-error" class="field__error" hidden></p>
+        </div>
+
+        <div class="field field--full">
+          <label for="notes" class="field__label">Notes <span class="field__optional">(optional)</span></label>
+          <textarea id="notes" class="input input--textarea" name="notes" rows="4" maxlength="500" aria-describedby="notes-hint"></textarea>
+          <p id="notes-hint" class="hint">Up to 500 characters.</p>
+        </div>
+      </div>
+
+      <div class="dialog__footer">
+        <button id="cancel-add" type="button" class="btn btn--secondary">Cancel</button>
+        <button id="submit-interest" type="submit" class="btn btn--primary">
+          <span class="spinner" aria-hidden="true"></span>
+          <span class="btn__label">Add to queue</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
 </body>
 </html>

@@ -464,6 +464,214 @@
     dom.notice.hidden = false;
   }
 
+  // ---------------------------------------------------------------------------
+  // Loading helpers
+  // ---------------------------------------------------------------------------
+
+  // aria-disabled (not `disabled`) keeps focus on the button while it is busy.
+  function setAriaDisabled(element, isDisabled) {
+    if (isDisabled) element.setAttribute('aria-disabled', 'true');
+    else element.removeAttribute('aria-disabled');
+  }
+
+  function setButtonLoading(button, isLoading, loadingLabel = '') {
+    const label = button.querySelector('.btn__label');
+    if (!button.dataset.idleLabel) button.dataset.idleLabel = label.textContent;
+    label.textContent = isLoading ? loadingLabel : button.dataset.idleLabel;
+    button.classList.toggle('is-loading', isLoading);
+    setAriaDisabled(button, isLoading);
+  }
+
+  function setAddFormLoading(isLoading) {
+    state.loading = isLoading;
+    setButtonLoading(dom.submitButton, isLoading, 'Saving…');
+    setAriaDisabled(dom.cancelAdd, isLoading);
+    dom.addForm.setAttribute('aria-busy', String(isLoading));
+    if (isLoading) announce('Saving adoption interest…');
+  }
+
+  function setRemoveDialogLoading(isLoading) {
+    setButtonLoading(dom.confirmRemove, isLoading, 'Removing…');
+    setAriaDisabled(dom.cancelRemove, isLoading);
+    if (isLoading) announce('Removing adoption interest…');
+  }
+
+  function isRemovalInFlight() {
+    return Boolean(ui.removalTargetId && state.pendingUpdates.has(ui.removalTargetId));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Validation
+  // ---------------------------------------------------------------------------
+  function readFormValues() {
+    const { elements } = dom.addForm;
+    return {
+      applicantName: sanitizeInput(elements.applicantName.value, { maxLength: LIMITS.applicantName }),
+      email: sanitizeInput(elements.email.value, { maxLength: LIMITS.email }),
+      phone: sanitizeInput(elements.phone.value, { maxLength: LIMITS.phone }),
+      animalName: sanitizeInput(elements.animalName.value, { maxLength: LIMITS.animalName }),
+      animalType: elements.animalType.value,
+      notes: sanitizeInput(elements.notes.value, { maxLength: LIMITS.notes, multiline: true }),
+    };
+  }
+
+  function setFieldError(field, message) {
+    const input = dom.addForm.elements[field];
+    const errorElement = document.getElementById(`${input.id}-error`);
+    const describedBy = [input.dataset.hintId, message ? errorElement.id : ''].filter(Boolean).join(' ');
+
+    errorElement.textContent = message;
+    errorElement.hidden = !message;
+
+    if (message) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+
+    if (describedBy) input.setAttribute('aria-describedby', describedBy);
+    else input.removeAttribute('aria-describedby');
+  }
+
+  function showFormSummary(message) {
+    dom.formSummary.hidden = !message;
+    dom.formSummary.textContent = message;
+  }
+
+  function showFormErrors(errors) {
+    Object.keys(VALIDATORS).forEach((field) => setFieldError(field, ''));
+    errors.forEach(({ field, message }) => setFieldError(field, message));
+
+    if (errors.length === 0) {
+      showFormSummary('');
+      return;
+    }
+    showFormSummary(errors.length === 1
+      ? 'Please correct the highlighted field before adding this interest.'
+      : `Please correct the ${errors.length} highlighted fields before adding this interest.`);
+    dom.addForm.elements[errors[0].field].focus();
+  }
+
+  function resetAddForm() {
+    dom.addForm.reset();
+    showFormErrors([]);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Actions (state mutations)
+  // ---------------------------------------------------------------------------
+  function addAdoptionInterest(values) {
+    const usedIds = new Set(state.adoptionInterests.map((interest) => interest.id));
+    const now = new Date().toISOString();
+    const interest = {
+      id: generateId(usedIds),
+      ...values,
+      status: 'Pending',
+      createdAt: now,
+      updatedAt: now,
+      isSample: false,
+    };
+
+    state.adoptionInterests = [...state.adoptionInterests, interest];
+
+    // Make sure the new record is visible even if a search is active.
+    const matchesSearch = searchAdoptionInterests([{ interest, position: 0 }], state.searchQuery).length > 0;
+    if (!matchesSearch) state.searchQuery = '';
+
+    persistChanges();
+    trackAnalytics('add_interest', { id: interest.id, animalType: interest.animalType });
+
+    ui.recentlyAddedId = interest.id;
+    render();
+    ui.recentlyAddedId = null;
+
+    const row = dom.queueBody.querySelector(`tr[data-id="${interest.id}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' });
+    return interest;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dialogs
+  // ---------------------------------------------------------------------------
+  function openDialog(dialog, opener) {
+    ui.dialogOpener = opener || document.activeElement;
+    ui.focusAfterDialog = null;
+    if (!dialog.open) dialog.showModal();
+  }
+
+  function closeDialogAndFocus(dialog, target) {
+    if (dialog.open) {
+      ui.focusAfterDialog = target;
+      dialog.close();
+    } else if (!document.activeElement || document.activeElement === document.body) {
+      target.focus();
+    }
+  }
+
+  function isDialogBusy(dialog) {
+    if (dialog === dom.addDialog) return state.loading;
+    if (dialog === dom.removeDialog) return isRemovalInFlight();
+    return false;
+  }
+
+  function handleDialogClose(event) {
+    if (event.target === dom.removeDialog && !isRemovalInFlight()) ui.removalTargetId = null;
+
+    const target = [ui.focusAfterDialog, ui.dialogOpener].find((element) => isVisible(element) && !element.disabled)
+      || dom.addButton;
+    ui.focusAfterDialog = null;
+    ui.dialogOpener = null;
+    target.focus();
+  }
+
+  function handleDialogCancel(event) {
+    // Escape is ignored while the dialog's request is in flight.
+    if (isDialogBusy(event.target)) event.preventDefault();
+  }
+
+  function openAddDialog(opener) {
+    if (!state.loading) resetAddForm();
+    openDialog(dom.addDialog, opener);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Event handlers
+  // ---------------------------------------------------------------------------
+  async function handleAddSubmit(event) {
+    event.preventDefault();
+    if (state.loading) return; // prevents duplicate submissions
+
+    const values = readFormValues();
+    const errors = validateForm(values, state.adoptionInterests);
+    showFormErrors(errors);
+    if (errors.length > 0) return;
+
+    setAddFormLoading(true);
+    let added = false;
+    try {
+      await simulateNetworkRequest();
+      addAdoptionInterest(values);
+      added = true;
+    } catch (error) {
+      console.warn('Adding the interest failed.', error);
+      showFormSummary('The adoption interest could not be saved because the request failed. Your entries are still here. Please try again.');
+    } finally {
+      setAddFormLoading(false);
+    }
+
+    if (!added) return;
+    if (dom.addDialog.open) dom.addDialog.close();
+    showToast('Adoption interest added successfully.');
+  }
+
+  function handleFormInput(event) {
+    const field = event.target.name;
+    if (!VALIDATORS[field] || event.target.getAttribute('aria-invalid') !== 'true') return;
+
+    // Clear an error as soon as the field becomes valid; new errors wait for the next submit.
+    if (!VALIDATORS[field](readFormValues())) {
+      setFieldError(field, '');
+      if (!dom.addForm.querySelector('[aria-invalid="true"]')) showFormSummary('');
+    }
+  }
+
   function scheduleSearchAnnouncement() {
     window.clearTimeout(ui.searchAnnounceTimer);
     ui.searchAnnounceTimer = window.setTimeout(() => {
@@ -512,15 +720,34 @@
       emptyTitle: byId('empty-state-title'),
       emptyMessage: byId('empty-state-message'),
       emptyAction: byId('empty-state-action'),
+      addDialog: byId('add-dialog'),
+      addForm: byId('add-form'),
+      formSummary: byId('form-summary'),
+      submitButton: byId('submit-interest'),
+      cancelAdd: byId('cancel-add'),
       toastRegion: byId('toast-region'),
       livePolite: byId('live-polite'),
       liveAssertive: byId('live-assertive'),
     });
   }
 
+  function prepareForm() {
+    const typeSelect = dom.addForm.elements.animalType;
+    ANIMAL_TYPES.forEach((type) => typeSelect.add(new Option(type, type)));
+
+    // Remember each field's permanent hint so error descriptions can be added alongside it.
+    Object.keys(VALIDATORS).forEach((field) => {
+      const input = dom.addForm.elements[field];
+      const hintId = input.getAttribute('aria-describedby');
+      if (hintId) input.dataset.hintId = hintId;
+    });
+  }
+
   function bindEvents() {
+    dom.addButton.addEventListener('click', () => openAddDialog(dom.addButton));
     dom.emptyAction.addEventListener('click', () => {
-      if (dom.emptyAction.dataset.action !== 'add') clearSearch();
+      if (dom.emptyAction.dataset.action === 'add') openAddDialog(dom.emptyAction);
+      else clearSearch();
     });
 
     dom.searchForm.addEventListener('submit', (event) => event.preventDefault());
@@ -533,6 +760,16 @@
     });
     dom.clearSearch.addEventListener('click', clearSearch);
 
+    dom.addForm.addEventListener('submit', handleAddSubmit);
+    dom.addForm.addEventListener('input', handleFormInput);
+    dom.addForm.addEventListener('change', handleFormInput);
+    dom.cancelAdd.addEventListener('click', () => {
+      if (!state.loading) dom.addDialog.close();
+    });
+
+    dom.addDialog.addEventListener('close', handleDialogClose);
+    dom.addDialog.addEventListener('cancel', handleDialogCancel);
+
     dom.noticeDismiss.addEventListener('click', () => {
       dom.notice.hidden = true;
       dom.queueSection.focus();
@@ -542,6 +779,7 @@
 
   function init() {
     cacheDom();
+    prepareForm();
     bindEvents();
     const notice = loadState();
     render();
