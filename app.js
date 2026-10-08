@@ -851,6 +851,20 @@
     updateStatus(select.dataset.id, select.value);
   }
 
+  function handleStorageEvent(event) {
+    // Keep multiple open tabs in sync instead of letting one silently overwrite the other.
+    if (event.key !== STORAGE_KEY || event.newValue === null) return;
+    const notice = loadState();
+    render();
+    if (notice) showNotice(notice);
+    else announce('The queue was updated in another tab.');
+  }
+
+  function handleUnexpectedError(event) {
+    console.error('Unexpected error:', event.error || event.reason || event);
+    showToast('Something went wrong. Please try again.', 'error');
+  }
+
   // ---------------------------------------------------------------------------
   // Initialisation
   // ---------------------------------------------------------------------------
@@ -953,6 +967,9 @@
       dom.queueSection.focus();
     });
 
+    window.addEventListener('storage', handleStorageEvent);
+    window.addEventListener('error', handleUnexpectedError);
+    window.addEventListener('unhandledrejection', handleUnexpectedError);
   }
 
   function init() {
